@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
@@ -35,9 +36,7 @@ type mainPageData struct {
 		ProfilePage []struct {
 			Graphql struct {
 				User struct {
-					// 用户的 ID，例如谷歌的 instagram 的 ID 就是 google
-					Id string `json:"id"`
-					// 媒介信息，
+					Id    string `json:"id"`
 					Media struct {
 						Edges []struct {
 							Node struct {
@@ -152,7 +151,7 @@ func instagramSpider(instagramAccount string) {
 		}
 	})
 
-	// 错误处理
+	// 错误
 	c.OnError(func(r *colly.Response, e error) {
 		log.Println("error:", e, r.Request.URL, string(r.Body))
 	})
@@ -162,15 +161,36 @@ func instagramSpider(instagramAccount string) {
 
 		// 保存图片
 		if strings.Index(r.Headers.Get("Content-Type"), "image") > -1 {
+
 			filename := outputDir + r.FileName()
 			// 重复的不保存
 			if _, err := os.Stat(filename); os.IsNotExist(err) {
 				r.Save(outputDir + r.FileName())
+
+				// 创建日志
+				logFilePath := "./log/"
+				if _, err := os.Stat(logFilePath); os.IsNotExist(err) {
+					os.MkdirAll(logFilePath, os.ModePerm)
+				}
+
+				logFile := logFilePath + time.Now().Format("2006-01-02")
+				if _, err := os.Stat(logFile); os.IsNotExist(err) {
+					os.Create(logFile)
+				}
+
+				// 记录日志
+				f, _ := os.OpenFile(logFile, os.O_WRONLY|os.O_APPEND, 0666)
+				defer f.Close()
+				f.WriteString(
+					time.Now().Format("2006-01-02 15:04:05") +
+						" [" + instagramAccount + "]: Save a new image.\n",
+				)
 			}
 
 			return
 		}
 
+		// json 内容
 		if strings.Index(r.Headers.Get("Content-Type"), "json") == -1 {
 			return
 		}
@@ -212,15 +232,25 @@ func init() {
 	}
 }
 
-func main() {
-
-	accountSlice := []string{
-		"google",
-		"gem0816",
-		"fengzifz",
-		"jaychou",
-		"baifernbah",
+func readLines(path string) ([]string ,error) {
+	file, err := os.Open(path)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(-3)
 	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	return lines, scanner.Err()
+}
+
+func main() {
+	accountSlice, _ := readLines("./accounts")
 
 	// 循环爬取
 	for _, value := range accountSlice {
